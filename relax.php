@@ -26,6 +26,7 @@ class couch{
     }
 	
 	
+
 	/*
 	*Creates a database with the name of whatever is stored in $database
 	*/
@@ -42,7 +43,7 @@ class couch{
 		$result = $this->execute_query('DELETE', $url);
 		return $result;
 	
-	}*/
+	}
 	
 	/*	Creates a document in whatever database is currently set with the document ID that is set
 	*	
