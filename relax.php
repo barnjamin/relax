@@ -6,9 +6,9 @@ class couch{
 		'host'=>'localhost',
 		'port'=>5984,
 		'ip' => '127.0.0.1',
-        'timeout' => 2,
-        'keep-alive'=> true,
-        'http-log'=> false,
+        	'timeout' => 2,
+       	 	'keep-alive'=> true,
+        	'http-log'=> false,
 		'username'=>null,
 		'password'=>null
 	);
@@ -22,15 +22,14 @@ class couch{
         $this->options['password'] = $password;
 		
 		$this->database = $db;
-		
     }
 	
 	
-
 	/*
 	*Creates a database with the name of whatever is stored in $database
 	*/
-	function create_db(){
+	function create_db($name){
+		$this->databse = $name;
 		$url = $this->build_url();
 		$result = $this->execute_query('PUT', $url);
 		return $result;
@@ -38,11 +37,11 @@ class couch{
 	/*
 	*Deletes the database currently stored in $database
 	*/
-	function delete_db(){
+	function delete_db($name){
+		$this->database = $name;
 		$url = $this->build_url();
 		$result = $this->execute_query('DELETE', $url);
 		return $result;
-	
 	}
 	
 	/*	Creates a document in whatever database is currently set with the document ID that is set
@@ -55,12 +54,20 @@ class couch{
 			$url = $this->build_url($doc_id);
 			$data = json_encode($data);
 			$result = $this->execute_query('PUT', $url, $data);
-			return $result;
+			if(isset($result['ok'])){
+				return $result;
+			}else{
+				return false;
+			}
 		}else if(empty($doc_id)&&!empty($data)){
 			$url = $this->build_url();
 			$data = json_encode($data);
 			$result = $this->execute_query('POST', $url, $data);
-			return $result;
+			if(isset($result['ok'])){
+				return $result;
+			}else{
+				return false;
+			}
 		}else  return array('error'=>'Please provide a document ID and data');
 	}
 	
@@ -72,7 +79,20 @@ class couch{
 	public function get_doc($doc_id=null, $params = null){
 		$url = $this->build_url($doc_id, $params);
 		$doc = $this->execute_query('GET', $url);
-		return $doc;
+		if(isset($doc['_id'])){
+			return $doc;
+		}else{
+			return false;
+		}
+	}
+	public function get_all(){
+		$url = $this->build_url('_all_docs', array('include_docs'=>'true'));
+		$doc = $this->execute_query('GET', $url);
+		if(isset($doc['rows'])){
+			return $doc['rows'];
+		}else{
+			return false;
+		}
 	}
 	
 	/*
@@ -81,7 +101,6 @@ class couch{
 	public function exists($doc_id = null){
 		if($doc_id == null) return;
 		$result = $this->get_head($doc_id);
-		
 		if(strpos($result['status'], '200')){
 			return true;
 		}else {
@@ -105,7 +124,12 @@ class couch{
 		$url = $this->build_url($doc_id);
 		$data = json_encode($doc);
 		$revised = $this->execute_query('PUT', $url, $data);
-		return $revised;
+		if(isset($revised['ok'])){
+			return $revised;
+		}else{
+			return false;
+		}
+		
 	}
 	
 	/*
@@ -115,17 +139,28 @@ class couch{
 		$url = $this->build_url($doc_id);
 		$data = json_encode($data);
 		$revised = $this->execute_query('PUT', $url, $data);
-		return $revised;
+		if(isset($revised['ok'])){
+			return $revised;
+		}else{
+			return false;
+		}
 	}
 	/*
 	*Deletes a document or a specific revision of a document
 	*/
 	public function delete_doc($doc_id=null, $revision=null){
-		$url = $this->build_url($doc_id);
-		$rev = ($revision)?$revision:$this->get_head($doc_id, 'Etag');
-		$url = $this->build_url($doc_id, array('rev'=>$rev));
+		if($revision=='ALL'){
+			$url = $this->build_url($doc_id);
+		}else{
+			$rev = (!empty($revision))?$revision:trim($this->get_head($doc_id, 'Etag'), '"');;
+			$url = $this->build_url($doc_id, array('rev'=>$rev));		
+		}
 		$result = $this->execute_query('DELETE', $url, null);
-		return $result;
+		if(isset($result['ok'])){
+			return $result;
+		}else{
+			return false;
+		}
 	}
 	
 	/*
@@ -160,9 +195,23 @@ class couch{
 		return $resulting;
 	}
 	
-	//Takes the name of the desgin doc, the view name, and an array of parameters to find
+	//Takes the name of the desgin doc, the view name, and an array of parameters to find	
 	public function get_view($design_doc=null, $view=null, $params=null){
 		$url = $this->build_url($this->build_view($design_doc, $view), $params);
+		$result = $this->execute_query('GET', $url);
+		
+		if(isset($result['rows'])&&count($result['rows'])>0){
+			return $result['rows'];
+		}else{
+			return false;
+		}
+	}
+	
+	/*
+	*Include an array of parameters like array('since'=>25);
+	*/
+	public function get_changes($params){
+		$url = $this->build_url('_changes', $params);
 		$result = $this->execute_query('GET', $url);
 		return $result;
 	}
@@ -231,10 +280,10 @@ class couch{
 		if($param && count($param)>0){
 			$url .= '?';
 			foreach($param as $key=>$value){
-				if($value=='true'||$value=='false'){
-					$url.= $key.'='.$value.'&';
+				if($key=='key'){
+					$url.= $key.'="'.urlencode($value).'"&';
 				}else{
-					$url.= $key.'="'.$value.'"&';
+					$url.= $key.'='.$value.'&';
 				}
 			}
 			$url = rtrim($url, '&');

@@ -1,0 +1,1 @@
+This is a php class that interacts with couchdb that doesn't bother with any kind of catching of errors. 
