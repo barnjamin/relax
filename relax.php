@@ -6,9 +6,9 @@ class couch{
 		'host'=>'localhost',
 		'port'=>5984,
 		'ip' => '127.0.0.1',
-        	'timeout' => 2,
-       	 	'keep-alive'=> true,
-        	'http-log'=> false,
+        'timeout' => 2,
+        'keep-alive'=> true,
+        'http-log'=> false,
 		'username'=>null,
 		'password'=>null
 	);
@@ -28,8 +28,8 @@ class couch{
 	/*
 	*Creates a database with the name of whatever is stored in $database
 	*/
-	function create_db($name){
-		$this->databse = $name;
+	public function create_db($name=null){
+		$this->database = (!empty($name))?$name:$this->database;
 		$url = $this->build_url();
 		$result = $this->execute_query('PUT', $url);
 		return $result;
@@ -37,13 +37,25 @@ class couch{
 	/*
 	*Deletes the database currently stored in $database
 	*/
-	function delete_db($name){
-		$this->database = $name;
+	public function delete_db($name=null){
+		$this->database = (!empty($name))?$name:$this->database;
 		$url = $this->build_url();
 		$result = $this->execute_query('DELETE', $url);
 		return $result;
 	}
 	
+	//returns database info object
+	public function db_info(){
+		$url = $this->build_url();
+		$result = $this->execute_query('GET', $url);
+		return $result;
+	}
+	//returns the integer value that should be unique by adding the total docs + deleted docs 
+	public function next_id(){
+		$result = $this->db_info();
+		$id = $result['doc_count']+$result['doc_del_count'];
+		return $id;
+	}
 	/*	Creates a document in whatever database is currently set with the document ID that is set
 	*	
 	*	$data is an array of key value pairs
@@ -72,7 +84,6 @@ class couch{
 	}
 	
 	
-	
 	/*
 	* Gets a document given a document id and optionally whatever parameters in the form of an array (i.e. key="ben.guidarelli@newdigs.com")
 	*/
@@ -85,16 +96,37 @@ class couch{
 			return false;
 		}
 	}
-	public function get_all(){
+
+	public function get_all($design=false){
 		$url = $this->build_url('_all_docs', array('include_docs'=>'true'));
 		$doc = $this->execute_query('GET', $url);
 		if(isset($doc['rows'])){
+			if(!$design){
+				$rows = array();
+				foreach($doc['rows'] as $row){	
+					if(strpos($row['id'], '_design')===0){}
+					else $rows[] = $row['doc'];
+				}			
+				return $rows;
+			}
 			return $doc['rows'];
 		}else{
 			return false;
 		}
 	}
 	
+	public function get_attributes($doc_id=null, $fields=null, $params=null){
+		$doc = $this->get_doc($doc_id, $params);
+		$returning = array();
+		foreach($fields as $field){
+			$returning[$field] = $doc[$field];
+		}
+		return $returning;
+	}
+	public function get_attribute($doc_id=null, $field=null, $params=null){
+		$doc = $this->get_doc($doc_id, $params);
+		return $doc[$field];
+	}
 	/*
 	*Checks to see if a document exists and is accessible with a head request. I don't remember why I added it but I'll leave it anyway
 	*/
@@ -131,6 +163,13 @@ class couch{
 		}
 		
 	}
+	public function set_attribute($doc_id=null, $field=null, $value=null){
+		$doc = $this->get_doc($doc_id, $params);
+		$doc[$field] = $value;
+		$result = $this->save($doc);
+		return $doc[$field];
+	}
+	
 	
 	/*
 	*This takes an array to be turned into an object and PUTS it to the document id you give it.  This will completely overwrite whatever is there.
@@ -145,6 +184,26 @@ class couch{
 			return false;
 		}
 	}
+	/*
+	*This takes a document that still has its _id and _rev and saves it
+	*/
+	public function save($data=null){
+		if($data==null)return;
+		if(!isset($data['_id'])||!isset($data['_rev'])){
+			$result = $this->create_doc($data);
+			return $result;
+		}
+		$url = $this->build_url($data['_id']);
+		$data = json_encode($data);
+		$revised = $this->execute_query('PUT', $url, $data);
+		if(isset($revised['ok'])){
+			return $revised;
+		}else{
+			return false;
+		}
+	}
+	
+	
 	/*
 	*Deletes a document or a specific revision of a document
 	*/
@@ -162,6 +221,19 @@ class couch{
 			return false;
 		}
 	}
+		//takes a document id and the number of revisions you want to keep and deletes all but those
+	public function delete_revs($doc_id=null, $num=null){
+		$data = array('revs_info'=>'true');
+		$result = $this->get_doc($doc_id, $data);
+		if(count($result['_revs_info'])>$num){
+			for($x=$num; $x<count($result['_revs_info']); $x++){
+				$this->delete_doc($result['_id'], $result['_revs_info'][$x]['rev']);			
+			}
+		}
+		$resulting = $this->get_doc($doc_id);
+		return $resulting;
+	}
+	
 	
 	/*
 	*Returns a specific revision of a document 
@@ -182,31 +254,27 @@ class couch{
 		}
 	}
 	
-	//takes a document id and the number of revisions you want to keep and deletes all but those
-	public function delete_revs($doc_id=null, $num=null){
-		$data = array('revs_info'=>'true');
-		$result = $this->get_doc($doc_id, $data);
-		if(count($result['_revs_info'])>$num){
-			for($x=$num; $x<count($result['_revs_info']); $x++){
-				$this->delete_doc($result['_id'], $result['_revs_info'][$x]['rev']);			
-			}
-		}
-		$resulting = $this->get_doc($doc_id);
-		return $resulting;
-	}
-	
+
 	//Takes the name of the desgin doc, the view name, and an array of parameters to find	
-	public function get_view($design_doc=null, $view=null, $params=null){
+	public function get_view($design_doc=null, $view=null, $params=null, $raw=false){
 		$url = $this->build_url($this->build_view($design_doc, $view), $params);
 		$result = $this->execute_query('GET', $url);
-		
+		if($raw) return $result;
 		if(isset($result['rows'])&&count($result['rows'])>0){
 			return $result['rows'];
 		}else{
 			return false;
 		}
 	}
-	
+	public function get_list($design_doc=null, $list=null, $view=null, $params=null){
+		$url = $this->build_url($this->build_view($design_doc, $view), $params);
+		$result = $this->execute_query('GET', $url);
+		if(isset($result['rows'])&&count($result['rows'])>0){
+			return $result['rows'];
+		}else{
+			return false;
+		}
+	}
 	/*
 	*Include an array of parameters like array('since'=>25);
 	*/
@@ -229,8 +297,8 @@ class couch{
 		curl_setopt($ch, CURLOPT_NOBODY, $header);
 		curl_setopt($ch, CURLOPT_HEADER, $header);
 		curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-type: application/json'));
-		if($this->options['password'])curl_setopt($ch, CURLOPT_USERPWD, $this->options['username'].':'.$this->options['password']);
-		if($data)curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+		//if($this->options['password'])curl_setopt($ch, CURLOPT_USERPWD, $this->options['username'].':'.$this->options['password']);
+		if(!empty($data))curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
 
 		
 		$result = curl_exec($ch);
@@ -263,14 +331,16 @@ class couch{
 	/*
 	*Builds the view section of the url
 	*/
-	private function build_view($design_doc=null, $view=null){
+	private function build_view($design_doc=null, $view=null, $include_docs=false){
 			$view = "_design/".$design_doc."/_view/".$view;
+			$view .= ($include_docs)?"?include_docs=true":"";
 			return $view;	
 	}
 	
 	
 	/*
 	*Builds the RESTful url of what youre trying to access
+	*Can accept an array for 'key' and url encodes it correctly. I think. its worked so far for me.
 	*/
 	private function build_url($doc_id=null, $param=null){
 	
@@ -280,8 +350,16 @@ class couch{
 		if($param && count($param)>0){
 			$url .= '?';
 			foreach($param as $key=>$value){
-				if($key=='key'){
-					$url.= $key.'="'.urlencode($value).'"&';
+				if($key=='key'||$key=='startkey'||$key=='endkey'){
+					if(is_array($value)){
+						$url .= $key .'=[';
+						foreach($value as $v){
+							$url .= '"'.urlencode($v).'",';
+						}
+						$url = rtrim($url, ",").']';
+					}else{
+						$url.= $key.'="'.urlencode($value).'"&';
+					}
 				}else{
 					$url.= $key.'='.$value.'&';
 				}
