@@ -208,7 +208,9 @@ class couch{
 	}
 	
 	
-	///params is the 
+	///params is the query string array with params['q'] being either a string or array of key:values 
+	//if you want to make sure the key:value pair is in the lucene doc prepend the key with a + 
+	//or a - if you want to make sure it is not in the doc.
 	public function text_search($design_doc, $index, $params){
 		$string = "_fti/_design/".$design_doc."/".$index;
 		$url = $this->build_url($string);
