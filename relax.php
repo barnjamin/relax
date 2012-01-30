@@ -426,7 +426,7 @@ class couch{
 					$query_string .= urlencode($key).":".urlencode($value)." ";
 				}
 			}else{
-				$query_string .= urlencode($query_string);
+				$query_string .= urlencode($params['q']);
 			}
 		}else return;		
 
