@@ -393,13 +393,13 @@ class couch{
 		if($param && count($param)>0){
 			$url .= '?';
 			foreach($param as $key=>$value){
-				if($key=='key'||$key=='startkey'||$key=='endkey'){
+				if($key=='key'||$key=='keys'||$key=='startkey'||$key=='endkey'){
 					if(is_array($value)){
 						$url .= $key .'=[';
 						foreach($value as $v){
 							$url .= '"'.urlencode($v).'",';
 						}
-						$url = rtrim($url, ",").']';
+						$url = rtrim($url, ",").']&';
 					}else{
 						if(false/*is_numeric($value)*/){
 							$url .= $key.'='.$value.'&';
