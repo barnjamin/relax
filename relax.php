@@ -13,7 +13,7 @@ class couch{
 		'password'=>null
 	);
 
-	public static $database;	
+	public $database;
 
 	public function __construct($username = null, $password = null, $db = null , $host = null, $port = null, $ip = null) {
         $this->options['host']     = (isset($host))?(string)$host:$this->options['host'];
@@ -233,7 +233,7 @@ class couch{
 	
 	
 	public function upload_attachment($doc_id, $attachment_name, $data, $content_type){
-		$rev = $this->get_head($doc_id, 'Etag');
+		$rev = $this->get_head($doc_id, 'ETag');
 		$rev = ltrim(rtrim($rev, "\""),"\"");
 		$string = $doc_id."/".$attachment_name;
 		$url = $this->build_url($string, array('rev'=>$rev));
@@ -248,7 +248,7 @@ class couch{
 		if($revision=='ALL'){
 			$url = $this->build_url($doc_id);
 		}else{
-			$rev = (!empty($revision))?$revision:trim($this->get_head($doc_id, 'Etag'), '"');;
+			$rev = (!empty($revision))?$revision:trim($this->get_head($doc_id, 'ETag'), '"');;
 			$url = $this->build_url($doc_id, array('rev'=>$rev));		
 		}
 		$result = $this->execute_query('DELETE', $url, null);
